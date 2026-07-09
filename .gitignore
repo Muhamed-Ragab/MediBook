@@ -21,6 +21,10 @@ Thumbs.db
 .vscode/
 .idea/
 
-# OpenCode
+# AI Tooling
 .omo/
 .dev-context/
+.claude/
+.codex/
+.gemini/
+.impeccable/

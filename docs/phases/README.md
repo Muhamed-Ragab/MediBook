@@ -28,6 +28,15 @@ M1 blocks all downstream. M2 and M3 run in parallel after M1. M4 depends on M3.
 - `phase-3-booking-engine.md` — M3: Availability slots, booking with concurrency, search
 - `phase-4-lifecycle-notifications.md` — M4: State machine, dashboards, cancel/reschedule, email triggers
 
+## Team Assignments
+
+| Module | Lead | Tasks |
+|--------|------|-------|
+| M1 — Scaffolding & Auth | **Merzk** | Django+React setup, User model, JWT auth, email confirmation, Login/Register UI |
+| M2 — Admin & Profiles | **Ragab** | Admin CRUD, Specialties, Doctor/Patient profiles, Django admin, Profile UIs |
+| M3 — Availability & Booking | **Youssef** | Slots, calendar UI, booking+concurrency, doctor search+book UI |
+| M4 — Lifecycle & Notifications | **Isaac** | State machine, dashboards, cancel/reschedule, email triggers, polish |
+
 ## Dev Instructions
 
 - Each phase is a parallel wave — up to 4 developers working simultaneously
