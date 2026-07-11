@@ -1,6 +1,6 @@
 import { useCallback } from "react";
-import { useAuthStore } from "../stores/authStore";
-import type { Role } from "../types";
+import { useAuthStore } from "@/shared/stores/authStore";
+import type { Role } from "@/shared/types";
 
 export function useAuth() {
   const { user, token, login, logout } = useAuthStore();

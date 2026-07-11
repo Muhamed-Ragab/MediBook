@@ -1,59 +1,9 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { loginApi } from "../api";
-import { useAuthStore } from "../../../shared/stores/authStore";
-
-const loginSchema = z.object({
-  email: z.string().email("Please enter a valid email address"),
-  password: z.string().min(1, "Password is required"),
-});
-
-type LoginForm = z.infer<typeof loginSchema>;
+import { Link } from "react-router";
+import { PasswordInput } from "@/shared/components/PasswordInput";
+import { useLogin } from "@/features/auth/hooks/useLogin";
 
 export default function LoginPage() {
-  const navigate = useNavigate();
-  const login = useAuthStore((s) => s.login);
-  const [serverError, setServerError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<LoginForm>({
-    resolver: zodResolver(loginSchema),
-  });
-
-  const onSubmit = async (data: LoginForm) => {
-    setServerError(null);
-    setIsSubmitting(true);
-    try {
-      const response = await loginApi(data);
-      if (response.success && response.data) {
-        login(response.data.access, {
-          id: response.data.user.id,
-          username: response.data.user.username,
-          email: response.data.user.email,
-          first_name: response.data.user.first_name,
-          role: response.data.user.role as "admin" | "doctor" | "patient",
-        });
-        navigate(`/${response.data.user.role}`, { replace: true });
-      } else {
-        const errorMsg =
-          typeof response.error === "string"
-            ? response.error
-            : "Invalid credentials. Please try again.";
-        setServerError(errorMsg);
-      }
-    } catch {
-      setServerError("Connection error. Please check your network.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  const { register, handleSubmit, errors, serverError, isSubmitting } = useLogin();
 
   return (
     <div className="card-body p-6 md:p-8">
@@ -73,7 +23,7 @@ export default function LoginPage() {
       )}
 
       {/* Form */}
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4">
         {/* Email */}
         <fieldset className="form-control">
           <label className="label py-1" htmlFor="email">
@@ -99,14 +49,11 @@ export default function LoginPage() {
           <label className="label py-1" htmlFor="password">
             <span className="label-text text-sm font-medium">Password</span>
           </label>
-          <input
+          <PasswordInput
             id="password"
-            type="password"
             placeholder="Enter your password"
-            className={`input input-bordered w-full text-sm ${
-              errors.password ? "input-error" : ""
-            }`}
             autoComplete="current-password"
+            hasError={!!errors.password}
             {...register("password")}
           />
           {errors.password && (
@@ -140,3 +87,4 @@ export default function LoginPage() {
     </div>
   );
 }
+

@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { useAuthStore } from "../../../shared/stores/authStore";
+import { useAuthStore } from "@/shared/stores/authStore";
 
 const features = [
   {

@@ -1,82 +1,18 @@
-import { useState } from "react";
 import { Link } from "react-router";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { registerApi } from "../api";
-
-const registerSchema = z
-  .object({
-    email: z.string().email("Please enter a valid email address"),
-    password: z.string().min(8, "Password must be at least 8 characters"),
-    confirmPassword: z.string(),
-    role: z.enum(["doctor", "patient"]),
-    first_name: z.string().optional(),
-    last_name: z.string().optional(),
-    specialty: z.string().optional(),
-    phone: z.string().optional(),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords do not match",
-    path: ["confirmPassword"],
-  });
-
-type RegisterForm = z.infer<typeof registerSchema>;
+import { useRegister } from "@/features/auth/hooks/useRegister";
 
 export default function RegisterPage() {
-  const [role, setRole] = useState<"doctor" | "patient">("patient");
-  const [serverError, setServerError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
-
   const {
+    role,
+    serverError,
+    isSubmitting,
+    isSuccess,
     register,
     handleSubmit,
-    setValue,
-    formState: { errors },
-  } = useForm<RegisterForm>({
-    resolver: zodResolver(registerSchema),
-    defaultValues: { role: "patient" },
-  });
+    errors,
+    handleRoleChange,
+  } = useRegister();
 
-  const handleRoleChange = (newRole: "doctor" | "patient") => {
-    setRole(newRole);
-    setValue("role", newRole);
-  };
-
-  const onSubmit = async (data: RegisterForm) => {
-    setServerError(null);
-    setIsSubmitting(true);
-    try {
-      const response = await registerApi({
-        email: data.email,
-        password: data.password,
-        role: data.role,
-        first_name: data.first_name || undefined,
-        last_name: data.last_name || undefined,
-        specialty: data.role === "doctor" ? data.specialty || "" : undefined,
-        phone: data.phone || undefined,
-      });
-      if (response.success) {
-        setIsSuccess(true);
-      } else {
-        let errorMsg = "Registration failed. Please try again.";
-        if (typeof response.error === "string") {
-          errorMsg = response.error;
-        } else if (response.error && typeof response.error === "object") {
-          const msgs = Object.values(response.error).flat().filter(Boolean);
-          if (msgs.length > 0) errorMsg = msgs.join(". ");
-        }
-        setServerError(errorMsg);
-      }
-    } catch {
-      setServerError("Connection error. Please check your network.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // Success state — email verification prompt
   if (isSuccess) {
     return (
       <div className="card-body p-6 md:p-8 text-center">
@@ -99,7 +35,6 @@ export default function RegisterPage() {
 
   return (
     <div className="card-body p-6 md:p-8">
-      {/* Header */}
       <div className="text-center mb-6">
         <h1 className="text-2xl font-bold text-base-content">Create account</h1>
         <p className="text-sm text-base-content/50 mt-1">
@@ -107,14 +42,12 @@ export default function RegisterPage() {
         </p>
       </div>
 
-      {/* Server error */}
       {serverError && (
         <div className="alert alert-error text-sm py-2 mb-4" role="alert">
           <span>{serverError}</span>
         </div>
       )}
 
-      {/* Role toggle */}
       <div className="flex gap-2 mb-6 bg-base-200 p-1 rounded-lg">
         <button
           type="button"
@@ -140,9 +73,7 @@ export default function RegisterPage() {
         </button>
       </div>
 
-      {/* Form */}
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        {/* Name row */}
+      <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <fieldset className="form-control">
             <label className="label py-1" htmlFor="first_name">
@@ -170,7 +101,6 @@ export default function RegisterPage() {
           </fieldset>
         </div>
 
-        {/* Email */}
         <fieldset className="form-control">
           <label className="label py-1" htmlFor="email">
             <span className="label-text text-sm font-medium">Email</span>
@@ -190,7 +120,6 @@ export default function RegisterPage() {
           )}
         </fieldset>
 
-        {/* Phone */}
         <fieldset className="form-control">
           <label className="label py-1" htmlFor="phone">
             <span className="label-text text-sm font-medium">Phone</span>
@@ -204,7 +133,6 @@ export default function RegisterPage() {
           />
         </fieldset>
 
-        {/* Doctor-only: Specialty */}
         {role === "doctor" && (
           <fieldset className="form-control">
             <label className="label py-1" htmlFor="specialty">
@@ -220,7 +148,6 @@ export default function RegisterPage() {
           </fieldset>
         )}
 
-        {/* Password */}
         <fieldset className="form-control">
           <label className="label py-1" htmlFor="password">
             <span className="label-text text-sm font-medium">Password</span>
@@ -240,7 +167,6 @@ export default function RegisterPage() {
           )}
         </fieldset>
 
-        {/* Confirm Password */}
         <fieldset className="form-control">
           <label className="label py-1" htmlFor="confirmPassword">
             <span className="label-text text-sm font-medium">Confirm password</span>
@@ -262,7 +188,6 @@ export default function RegisterPage() {
           )}
         </fieldset>
 
-        {/* Submit */}
         <button
           type="submit"
           className="btn btn-primary w-full mt-2"
@@ -275,7 +200,6 @@ export default function RegisterPage() {
         </button>
       </form>
 
-      {/* Login link */}
       <p className="text-center text-sm text-base-content/50 mt-6">
         Already have an account?{" "}
         <Link to="/login" className="text-primary font-medium hover:underline">

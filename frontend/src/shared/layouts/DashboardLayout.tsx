@@ -1,7 +1,8 @@
-import { Link, Outlet, useLocation } from "react-router";
-import { useAuthStore } from "../stores/authStore";
-import { useUiStore } from "../stores/uiStore";
-import type { Role } from "../types";
+import { Link, Outlet, useLocation, Navigate } from "react-router";
+import { LogOut } from "lucide-react";
+import { useAuthStore } from "@/shared/stores/authStore";
+import { useUiStore } from "@/shared/stores/uiStore";
+import type { Role } from "@/shared/types";
 
 interface NavItem {
   label: string;
@@ -13,6 +14,7 @@ const roleNav: Record<Role, NavItem[]> = {
   admin: [
     { label: "Overview", path: "/admin", icon: "M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" },
     { label: "Users", path: "/admin/users", icon: "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" },
+    { label: "Specialties", path: "/admin/specialties", icon: "M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" },
   ],
   doctor: [
     { label: "Dashboard", path: "/doctor", icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" },
@@ -28,19 +30,38 @@ const roleNav: Record<Role, NavItem[]> = {
   ],
 };
 
+const routeRoleMap: Record<string, Role> = {
+  doctor: "doctor",
+  patient: "patient",
+  admin: "admin",
+};
+
 export function Component() {
-  const { user, logout } = useAuthStore();
+  const { user, token, logout } = useAuthStore();
   const { sidebarOpen, setSidebarOpen } = useUiStore();
   const location = useLocation();
-  const role = user?.role ?? "patient";
+
+  // Guard: unauthenticated → login
+  if (!token || !user) {
+    return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+  }
+
+  // Guard: role mismatch — user cannot access another role's section
+  const pathSegment = location.pathname.split("/")[1] as Role;
+  const expectedRole = routeRoleMap[pathSegment];
+  if (expectedRole && user.role !== expectedRole) {
+    return <Navigate to={`/${user.role}`} replace />;
+  }
+
+  const role = user.role ?? "patient";
   const navItems = roleNav[role as Role] ?? roleNav.patient;
 
   return (
-    <div className="min-h-screen bg-base-200 flex">
+    <div className="flex h-full overflow-hidden bg-base-200 relative">
       {/* Sidebar overlay for mobile */}
       {sidebarOpen && (
           <div
-            className="fixed inset-0 bg-black/20 z-20 lg:hidden"
+            className="absolute inset-0 bg-black/20 z-20 lg:hidden"
             onClick={() => setSidebarOpen(false)}
             onKeyDown={(e) => e.key === "Escape" && setSidebarOpen(false)}
             role="presentation"
@@ -50,31 +71,12 @@ export function Component() {
       {/* Sidebar */}
       <aside
         className={`
-          fixed top-0 left-0 z-30 h-full w-64 bg-base-100 border-r border-base-300
-          transition-transform duration-200 ease-in-out flex flex-col
-          lg:static lg:translate-x-0
+          absolute inset-y-0 left-0 z-30 w-64 bg-base-100 border-r border-base-300 flex flex-col
+          transition-transform duration-200 ease-in-out
+          lg:static lg:z-auto lg:translate-x-0
           ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
         `}
       >
-        {/* Sidebar header */}
-        <div className="flex items-center justify-between h-16 px-4 border-b border-base-200 shrink-0">
-          <Link to="/" className="flex items-center gap-2 text-primary font-bold text-lg tracking-tight">
-            <svg viewBox="0 0 24 24" className="w-6 h-6 fill-current" aria-hidden="true">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15H9v-4H5v-2h4V7h2v4h4v2h-4v4z" />
-            </svg>
-            MediBook
-          </Link>
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="btn btn-ghost btn-sm btn-square lg:hidden"
-            aria-label="Close sidebar"
-          >
-            <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current" aria-hidden="true">
-              <path d="M6 18L18 6M6 6l12 12" stroke="currentColor" strokeWidth="2" fill="none" />
-            </svg>
-          </button>
-        </div>
-
         {/* Nav items */}
         <nav className="p-3 space-y-1 flex-1 overflow-y-auto">
           {navItems.map((item) => {
@@ -104,14 +106,18 @@ export function Component() {
         </nav>
 
         {/* Sidebar footer */}
-        <div className="p-3 border-t border-base-200 shrink-0">
+        <div className="mt-auto p-3 border-t border-base-200 shrink-0 space-y-1">
+          <div className="flex items-center gap-2 text-sm px-3 py-2">
+            <div className="w-7 h-7 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center shrink-0">
+              {(user?.first_name || user?.email || "?")[0].toUpperCase()}
+            </div>
+            <span className="text-base-content/70 font-medium truncate">{user?.first_name || user?.email}</span>
+          </div>
           <button
             onClick={() => logout()}
             className="flex items-center gap-3 px-3 py-2.5 w-full rounded-lg text-sm font-medium text-base-content/60 hover:text-error hover:bg-error/5 transition-colors"
           >
-            <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current" aria-hidden="true">
-              <path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" stroke="currentColor" strokeWidth="2" fill="none" />
-            </svg>
+            <LogOut className="w-5 h-5" aria-hidden="true" />
             Sign Out
           </button>
         </div>
@@ -119,32 +125,12 @@ export function Component() {
 
       {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top bar */}
-        <header className="bg-base-100 border-b border-base-300 h-16 flex items-center px-4 lg:px-6 sticky top-0 z-10">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="btn btn-ghost btn-sm btn-square lg:hidden mr-2"
-            aria-label="Open sidebar"
-          >
-            <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current" aria-hidden="true">
-              <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" fill="none" />
-            </svg>
-          </button>
-          <div className="flex-1" />
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2 text-sm">
-              <div className="w-7 h-7 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center">
-                {(user?.first_name || user?.email || "?")[0].toUpperCase()}
-              </div>
-              <span className="text-base-content/70 font-medium">{user?.first_name || user?.email}</span>
-            </div>
-          </div>
-        </header>
-
         {/* Page content */}
-        <div className="flex-1 p-4 lg:p-6 max-w-7xl w-full mx-auto">
-          <Outlet />
-        </div>
+        <main className="flex-1 overflow-y-auto">
+          <div className="p-4 lg:p-6 max-w-7xl w-full mx-auto">
+            <Outlet />
+          </div>
+        </main>
       </div>
     </div>
   );

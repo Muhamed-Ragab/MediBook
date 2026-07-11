@@ -2,7 +2,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from users.models import DoctorProfile, PatientProfile
+from users.models import DoctorProfile, PatientProfile, Specialty
 
 User = get_user_model()
 
@@ -30,8 +30,9 @@ def doctor_user(db):
         is_approved=True,
         email_verified=True,
     )
+    specialty = Specialty.objects.get_or_create(name="Cardiology")[0]
     DoctorProfile.objects.create(
-        user=user, specialty="Cardiology", bio="Experienced cardiologist", phone="1234567890"
+        user=user, specialty=specialty, bio="Experienced cardiologist", phone="1234567890"
     )
     return user
 

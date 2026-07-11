@@ -1,5 +1,6 @@
 import { Link, Outlet } from "react-router";
-import { useAuthStore } from "../stores/authStore";
+import { PlusCircle } from "lucide-react";
+import { useAuthStore } from "@/shared/stores/authStore";
 
 const YEAR = new Date().getFullYear();
 
@@ -8,16 +9,14 @@ export function Component() {
   const isAuthenticated = !!token;
 
   return (
-    <div className="min-h-screen bg-base-200 flex flex-col">
+    <div className="h-dvh flex flex-col overflow-hidden bg-base-200">
       {/* Navbar */}
       <header className="bg-base-100 border-b border-base-300 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2 text-primary font-bold text-xl tracking-tight">
-              <svg viewBox="0 0 24 24" className="w-7 h-7 fill-current" aria-hidden="true">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15H9v-4H5v-2h4V7h2v4h4v2h-4v4z" />
-              </svg>
+              <PlusCircle className="w-7 h-7" aria-hidden="true" />
               MediBook
             </Link>
 
@@ -71,12 +70,12 @@ export function Component() {
       </header>
 
       {/* Main content */}
-      <main className="flex-1">
+      <main className="flex-1 min-h-0 overflow-y-auto">
         <Outlet />
       </main>
 
       {/* Footer */}
-      <footer className="bg-base-100 border-t border-base-300 py-8">
+      <footer className="bg-base-100 border-t border-base-300 py-4">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-base-content/50">
           &copy; {YEAR} MediBook. All rights reserved.
         </div>

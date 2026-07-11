@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
-import RegisterPage from "../RegisterPage";
+import RegisterPage from "@/features/auth/pages/RegisterPage";
 
 describe("RegisterPage", () => {
   it("should render registration form", () => {

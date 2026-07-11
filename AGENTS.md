@@ -76,3 +76,13 @@ cd backend && pytest                 # TDD
 - No `react-router-dom` — use `react-router` directly (v7 unified package).
 - `tsc --noEmit` runs before `vite build` — a tsc error blocks production build.
 - `.omo/` is gitignored. Plans live in `.omo/plans/`. Drafts are temporary.
+
+## Component Architecture Rules (SOLID)
+
+1. **No Constant Objects in Components**: Never declare constant objects, arrays, or configurations directly inside component files. Separate them into dedicated files (e.g., `constants.ts` or `constants/`).
+2. **Types Separation**: Define types and interfaces in separate files (e.g., `types.ts` or `types/`) and import them. Do not define types inline within component files.
+3. **Logic & Hooks Extraction**: Do not place business logic, data fetching, or complex hooks directly inside component functions. Extract them into custom hooks (e.g., `use[Feature]`) and place them in the `hooks/` directory. Keep components focused solely on rendering UI (Single Responsibility Principle).
+4. **SOLID Principles**: Adhere to SOLID principles across the codebase.
+
+5. **Zod Schemas Separation**: Do not define Zod schemas (or any validation schemas) inside component files. Move them to a separate file (e.g., `constants.ts` or `schemas.ts`).
+6. **One Component Per File**: Do not define more than one React component in a single file. Every component must be separated into its own dedicated file following the Single Responsibility Principle.
