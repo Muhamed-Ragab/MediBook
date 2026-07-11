@@ -1,2 +1,53 @@
 @import "tailwindcss";
 @plugin "daisyui";
+
+@plugin "daisyui/theme" {
+  name: "medibook";
+  default: true;
+  prefersdark: false;
+  color-scheme: light;
+
+  /* Base — clean, airy */
+  --color-base-100: oklch(99% 0 0);
+  --color-base-200: oklch(96% 0.01 240);
+  --color-base-300: oklch(92% 0.015 240);
+  --color-base-content: oklch(18% 0.03 240);
+
+  /* Primary — deep teal-navy, used sparingly (≤10% per DESIGN.md) */
+  --color-primary: oklch(36% 0.08 220);
+  --color-primary-content: oklch(98% 0.01 220);
+
+  /* Secondary — lighter teal for hover/secondary actions */
+  --color-secondary: oklch(60% 0.12 210);
+  --color-secondary-content: oklch(98% 0.01 210);
+
+  /* Accent — subtle cyan accent */
+  --color-accent: oklch(70% 0.12 190);
+  --color-accent-content: oklch(20% 0.05 190);
+
+  /* Neutral — for cards, panels, dropdowns */
+  --color-neutral: oklch(45% 0.03 240);
+  --color-neutral-content: oklch(98% 0.01 240);
+
+  /* Semantic — calm, not alarming */
+  --color-info: oklch(65% 0.12 250);
+  --color-info-content: oklch(98% 0.01 250);
+  --color-success: oklch(58% 0.18 145);
+  --color-success-content: oklch(98% 0.01 145);
+  --color-warning: oklch(78% 0.16 85);
+  --color-warning-content: oklch(20% 0.05 85);
+  --color-error: oklch(55% 0.18 30);
+  --color-error-content: oklch(98% 0.01 30);
+
+  /* Radius — subtle rounding */
+  --radius-selector: 0.5rem;
+  --radius-field: 0.375rem;
+  --radius-box: 0.75rem;
+
+  /* Border */
+  --border: 1px;
+
+  /* Depth — flat by default (DESIGN.md: no unnecessary shadows) */
+  --depth: 0;
+  --noise: 0;
+}
