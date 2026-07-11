@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router";
-import ProtectedRoute from "../ProtectedRoute";
-import { useAuthStore } from "../../stores/authStore";
+import ProtectedRoute from "@/shared/components/ProtectedRoute";
+import { useAuthStore } from "@/shared/stores/authStore";
 
 function TestChild() {
   return <div>Protected Content</div>;

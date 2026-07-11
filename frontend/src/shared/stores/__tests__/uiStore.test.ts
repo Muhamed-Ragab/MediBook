@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { useUiStore } from "../uiStore";
+import { useUiStore } from "@/shared/stores/uiStore";
 
 describe("uiStore", () => {
   it("should start with sidebar closed", () => {

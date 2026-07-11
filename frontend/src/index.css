@@ -51,3 +51,9 @@
   --depth: 0;
   --noise: 0;
 }
+
+@layer base {
+  button {
+    cursor: pointer;
+  }
+}

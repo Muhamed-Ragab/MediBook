@@ -7,6 +7,8 @@ const RegisterPage = lazy(() => import("../features/auth/pages/RegisterPage"));
 const DoctorDashboard = lazy(() => import("../features/dashboard/pages/DoctorDashboard"));
 const PatientDashboard = lazy(() => import("../features/dashboard/pages/PatientDashboard"));
 const AdminDashboard = lazy(() => import("../features/admin/pages/AdminDashboard"));
+const AdminUsers = lazy(() => import("../features/admin/pages/AdminUsers"));
+const AdminSpecialties = lazy(() => import("../features/admin/pages/AdminSpecialties"));
 const AppointmentsPage = lazy(() => import("../features/dashboard/pages/AppointmentsPage"));
 const AvailabilityPage = lazy(() => import("../features/availability/pages/AvailabilityPage"));
 const DoctorSearchPage = lazy(() => import("../features/booking/pages/DoctorSearchPage"));
@@ -55,6 +57,8 @@ export const router = createBrowserRouter([
         lazy: () => import("../shared/layouts/DashboardLayout"),
         children: [
           { index: true, Component: AdminDashboard },
+          { path: "users", Component: AdminUsers },
+          { path: "specialties", Component: AdminSpecialties },
         ],
       },
     ],

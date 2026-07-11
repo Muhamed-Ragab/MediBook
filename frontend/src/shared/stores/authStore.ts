@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Role } from "../types";
+import type { Role } from "@/shared/types";
 
 interface UserInfo {
   id: number;
