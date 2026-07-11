@@ -1,5 +1,7 @@
 import { Outlet, Link } from "react-router";
 
+const YEAR = new Date().getFullYear();
+
 export function Component() {
   return (
     <div className="min-h-screen bg-base-200 flex flex-col items-center justify-center px-4 py-12">
@@ -20,7 +22,7 @@ export function Component() {
       </div>
 
       <p className="text-sm text-base-content/40 mt-6">
-        &copy; {new Date().getFullYear()} MediBook
+        &copy; {YEAR} MediBook
       </p>
     </div>
   );

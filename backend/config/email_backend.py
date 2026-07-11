@@ -5,16 +5,18 @@ import dns.resolver
 from django.core.mail.backends.smtp import EmailBackend, DNS_NAME
 
 
+_RESOLVER = dns.resolver.Resolver()
+_RESOLVER.nameservers = ["8.8.8.8", "1.1.1.1"]
+_RESOLVER.timeout = 5
+_RESOLVER.lifetime = 10
+
+
 class ResolvedEmailBackend(EmailBackend):
     """SMTP backend that resolves EMAIL_HOST via Google DNS,
     bypassing the flaky systemd-resolved stub at 127.0.0.53."""
 
     def _resolve(self, hostname: str) -> str:
-        resolver = dns.resolver.Resolver()
-        resolver.nameservers = ["8.8.8.8", "1.1.1.1"]
-        resolver.timeout = 5
-        resolver.lifetime = 10
-        answers = resolver.resolve(hostname, "A")
+        answers = _RESOLVER.resolve(hostname, "A")
         return answers[0].address
 
     def open(self):

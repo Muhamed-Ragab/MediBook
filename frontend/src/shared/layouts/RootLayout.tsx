@@ -1,6 +1,8 @@
 import { Link, Outlet } from "react-router";
 import { useAuthStore } from "../stores/authStore";
 
+const YEAR = new Date().getFullYear();
+
 export function Component() {
   const { user, token } = useAuthStore();
   const isAuthenticated = !!token;
@@ -76,7 +78,7 @@ export function Component() {
       {/* Footer */}
       <footer className="bg-base-100 border-t border-base-300 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-base-content/50">
-          &copy; {new Date().getFullYear()} MediBook. All rights reserved.
+          &copy; {YEAR} MediBook. All rights reserved.
         </div>
       </footer>
     </div>

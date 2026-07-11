@@ -37,7 +37,7 @@ export default function VerifyEmailPage() {
         {status === "loading" && (
           <>
             <Loader2 size={36} className="animate-spin mx-auto text-base-content/30" />
-            <h1 className="text-lg font-semibold mt-4" style={{ color: "var(--brand-dark)" }}>
+            <h1 className="text-lg font-semibold mt-4 text-base-content">
               Verifying your email
             </h1>
             <p className="text-sm text-base-content/50 mt-1">Please wait...</p>
@@ -46,8 +46,8 @@ export default function VerifyEmailPage() {
 
         {status === "success" && (
           <>
-            <CheckCircle size={36} className="mx-auto" style={{ color: "var(--brand)" }} />
-            <h1 className="text-lg font-semibold mt-4" style={{ color: "var(--brand-dark)" }}>
+            <CheckCircle size={36} className="mx-auto text-success" />
+            <h1 className="text-lg font-semibold mt-4 text-base-content">
               Email verified
             </h1>
             <p className="text-sm text-base-content/50 mt-1">{message}</p>
@@ -60,7 +60,7 @@ export default function VerifyEmailPage() {
         {status === "error" && (
           <>
             <XCircle size={36} className="mx-auto text-error" />
-            <h1 className="text-lg font-semibold mt-4" style={{ color: "var(--brand-dark)" }}>
+            <h1 className="text-lg font-semibold mt-4 text-base-content">
               Verification failed
             </h1>
             <p className="text-sm text-base-content/50 mt-1">{message}</p>

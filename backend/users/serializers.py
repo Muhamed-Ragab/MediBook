@@ -30,11 +30,17 @@ class RegisterSerializer(serializers.Serializer):
     # Patient-specific
     phone = serializers.CharField(required=False, allow_blank=True, default="")
     date_of_birth = serializers.DateField(required=False, allow_null=True, default=None)
+    emergency_contact = serializers.CharField(required=False, allow_blank=True, default="")
 
     def validate_email(self, value):
         if User.objects.filter(email=value).exists():
             raise serializers.ValidationError("A user with this email already exists.")
         return value
+
+    def validate(self, data):
+        if data.get("role") == "doctor" and not data.get("specialty"):
+            raise serializers.ValidationError({"specialty": "Specialty is required for doctors."})
+        return data
 
     def create(self, validated_data):
         role = validated_data["role"]
@@ -66,6 +72,7 @@ class RegisterSerializer(serializers.Serializer):
                 user=user,
                 phone=validated_data.get("phone", ""),
                 date_of_birth=validated_data.get("date_of_birth"),
+                emergency_contact=validated_data.get("emergency_contact", ""),
             )
 
         return user

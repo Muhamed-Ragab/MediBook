@@ -1,3 +1,5 @@
+import logging
+
 from django.conf import settings
 from django.contrib.auth import get_user_model, authenticate
 from django.core.mail import EmailMultiAlternatives
@@ -14,6 +16,7 @@ from .models import User
 from .serializers import RegisterSerializer, UserSerializer
 from .tokens import email_verification_token
 
+logger = logging.getLogger(__name__)
 UserModel = get_user_model()
 
 
@@ -66,8 +69,7 @@ def register_view(request):
         msg.attach_alternative(html, "text/html")
         msg.send(fail_silently=False)
     except Exception:
-        # ponytail: email failure shouldn't block registration
-        pass
+        logger.exception("Failed to send verification email to %s", user.email)
 
     refresh = RefreshToken.for_user(user)
     user_data = UserSerializer(user).data
@@ -173,12 +175,6 @@ def login_view(request):
 @permission_classes([IsAuthenticated])
 def me_view(request):
     user = request.user
-    # Use select_related to avoid N+1
-    if hasattr(user, "doctor_profile"):
-        user = UserModel.objects.select_related("doctor_profile").get(pk=user.pk)
-    elif hasattr(user, "patient_profile"):
-        user = UserModel.objects.select_related("patient_profile").get(pk=user.pk)
-
     serializer = UserSerializer(user)
     return Response(
         {"success": True, "data": serializer.data, "error": None}
