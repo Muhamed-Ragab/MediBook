@@ -13,6 +13,7 @@ const DoctorSearchPage = lazy(() => import("../features/booking/pages/DoctorSear
 const BookAppointmentPage = lazy(() => import("../features/booking/pages/BookAppointmentPage"));
 const DoctorProfilePage = lazy(() => import("../features/profile/pages/DoctorProfilePage"));
 const PatientProfilePage = lazy(() => import("../features/profile/pages/PatientProfilePage"));
+const VerifyEmailPage = lazy(() => import("../features/auth/pages/VerifyEmailPage"));
 
 export const router = createBrowserRouter([
   {
@@ -20,6 +21,7 @@ export const router = createBrowserRouter([
     lazy: () => import("../shared/layouts/RootLayout"),
     children: [
       { index: true, Component: HomePage },
+      { path: "verify-email", Component: VerifyEmailPage },
       {
         lazy: () => import("../shared/layouts/AuthLayout"),
         children: [
