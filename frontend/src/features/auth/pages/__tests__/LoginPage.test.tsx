@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
-import LoginPage from "../LoginPage";
-import { useAuthStore } from "../../../../shared/stores/authStore";
+import LoginPage from "@/features/auth/pages/LoginPage";
+import { useAuthStore } from "@/shared/stores/authStore";
 
 describe("LoginPage", () => {
   beforeEach(() => {
