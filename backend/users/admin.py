@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
-from .models import DoctorProfile, PatientProfile, User
+from .models import DoctorProfile, PatientProfile, Specialty, User
 
 
 class DoctorProfileInline(admin.StackedInline):
@@ -35,10 +35,16 @@ class CustomUserAdmin(UserAdmin):
 @admin.register(DoctorProfile)
 class DoctorProfileAdmin(admin.ModelAdmin):
     list_display = ("user", "specialty", "phone")
-    search_fields = ("user__username", "user__email", "specialty")
+    search_fields = ("user__username", "user__email", "specialty__name")
 
 
 @admin.register(PatientProfile)
 class PatientProfileAdmin(admin.ModelAdmin):
     list_display = ("user", "phone", "date_of_birth")
     search_fields = ("user__username", "user__email")
+
+
+@admin.register(Specialty)
+class SpecialtyAdmin(admin.ModelAdmin):
+    list_display = ("name", "description")
+    search_fields = ("name",)

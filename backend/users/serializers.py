@@ -1,21 +1,44 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
-from .models import DoctorProfile, PatientProfile
+from .models import DoctorProfile, PatientProfile, Specialty
 
 User = get_user_model()
 
 
+class SpecialtySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Specialty
+        fields = "__all__"
+
+
+class UserAdminSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = [
+            "id", "username", "email", "role",
+            "first_name", "last_name",
+            "is_approved", "is_blocked", "email_verified",
+        ]
+        read_only_fields = ["id", "email_verified"]
+
+
 class DoctorProfileSerializer(serializers.ModelSerializer):
+    specialty = serializers.SlugRelatedField(
+        slug_field="name", queryset=Specialty.objects.all(), required=False
+    )
+
     class Meta:
         model = DoctorProfile
-        fields = ["specialty", "bio", "phone", "photo_url"]
+        fields = ["id", "specialty", "bio", "phone", "photo_url"]
+        read_only_fields = ["id"]
 
 
 class PatientProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = PatientProfile
-        fields = ["phone", "date_of_birth", "emergency_contact"]
+        fields = ["id", "phone", "date_of_birth", "emergency_contact"]
+        read_only_fields = ["id"]
 
 
 class RegisterSerializer(serializers.Serializer):
@@ -62,9 +85,12 @@ class RegisterSerializer(serializers.Serializer):
         )
 
         if role == "doctor":
+            specialty_obj, _ = Specialty.objects.get_or_create(
+                name=validated_data.get("specialty", "") or "General"
+            )
             DoctorProfile.objects.create(
                 user=user,
-                specialty=validated_data.get("specialty", ""),
+                specialty=specialty_obj,
                 bio=validated_data.get("bio", ""),
             )
         elif role == "patient":

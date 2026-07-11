@@ -6,14 +6,26 @@ from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
-from rest_framework import status
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import status, viewsets
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.filters import SearchFilter
+from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenRefreshView as SimpleJWTRefreshView
 
-from .models import User
-from .serializers import RegisterSerializer, UserSerializer
+from .models import DoctorProfile, PatientProfile, Specialty, User
+from .serializers import (
+    DoctorProfileSerializer,
+    PatientProfileSerializer,
+    RegisterSerializer,
+    SpecialtySerializer,
+    UserAdminSerializer,
+    UserSerializer,
+)
 from .tokens import email_verification_token
 
 logger = logging.getLogger(__name__)
@@ -151,6 +163,16 @@ def login_view(request):
             status=status.HTTP_401_UNAUTHORIZED,
         )
 
+    if user.is_blocked:
+        return Response(
+            {
+                "success": False,
+                "data": None,
+                "error": "Your account has been blocked. Contact support.",
+            },
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
     refresh = RefreshToken.for_user(user)
     return Response(
         {
@@ -171,6 +193,37 @@ def login_view(request):
     )
 
 
+class BlockedAwareRefreshView(SimpleJWTRefreshView):
+    """Refresh endpoint that also rejects blocked accounts.
+
+    A blocked user who already holds a valid refresh token would otherwise
+    stay authenticated until the token expires. Decoding the refresh token
+    lets us revoke their session as soon as the account is blocked.
+    """
+
+    def post(self, request, *args, **kwargs):
+        refresh_token = request.data.get("refresh")
+        if refresh_token:
+            try:
+                token = RefreshToken(refresh_token)
+                user_id = token.payload.get("user_id")
+                if user_id is not None:
+                    user = get_user_model().objects.get(id=user_id)
+                    if getattr(user, "is_blocked", False):
+                        return Response(
+                            {
+                                "success": False,
+                                "data": None,
+                                "error": "Your account has been blocked. Contact support.",
+                            },
+                            status=status.HTTP_401_UNAUTHORIZED,
+                        )
+            except (InvalidToken, TokenError, get_user_model().DoesNotExist):
+                # Let the parent view produce the canonical error for bad tokens.
+                pass
+        return super().post(request, *args, **kwargs)
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def me_view(request):
@@ -179,3 +232,74 @@ def me_view(request):
     return Response(
         {"success": True, "data": serializer.data, "error": None}
     )
+
+
+class SpecialtyViewSet(viewsets.ModelViewSet):
+    queryset = Specialty.objects.all()
+    serializer_class = SpecialtySerializer
+
+    def get_permissions(self):
+        if self.action in ("create", "update", "partial_update", "destroy"):
+            return [IsAdminUser()]
+        return [AllowAny()]
+
+
+class UserViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.all().order_by("-date_joined")
+    serializer_class = UserAdminSerializer
+    permission_classes = [IsAdminUser]
+    http_method_names = ["get", "patch", "head", "options"]
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    filterset_fields = ["role"]
+    search_fields = ["email", "username"]
+
+    def perform_update(self, serializer):
+        target = self.get_object()
+        if target.role == "admin":
+            raise PermissionDenied("Admins cannot modify other admin users.")
+        serializer.save()
+
+
+class IsProfileOwner(BasePermission):
+    """Allow access only to the profile owner or admin users."""
+
+    def has_object_permission(self, request, view, obj):
+        return obj.user == request.user or request.user.is_staff
+
+
+class DoctorProfileViewSet(viewsets.ModelViewSet):
+    queryset = DoctorProfile.objects.select_related("user").all()
+    serializer_class = DoctorProfileSerializer
+    http_method_names = ["get", "patch", "head", "options"]
+
+    def get_permissions(self):
+        if self.action == "list":
+            return [IsAdminUser()]
+        return [IsAuthenticated(), IsProfileOwner()]
+
+    def perform_update(self, serializer):
+        if (
+            serializer.instance.user != self.request.user
+            and not self.request.user.is_staff
+        ):
+            self.permission_denied(self.request)
+        serializer.save()
+
+
+class PatientProfileViewSet(viewsets.ModelViewSet):
+    queryset = PatientProfile.objects.select_related("user").all()
+    serializer_class = PatientProfileSerializer
+    http_method_names = ["get", "patch", "head", "options"]
+
+    def get_permissions(self):
+        if self.action == "list":
+            return [IsAdminUser()]
+        return [IsAuthenticated(), IsProfileOwner()]
+
+    def perform_update(self, serializer):
+        if (
+            serializer.instance.user != self.request.user
+            and not self.request.user.is_staff
+        ):
+            self.permission_denied(self.request)
+        serializer.save()
