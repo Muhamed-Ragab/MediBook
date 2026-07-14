@@ -6,6 +6,7 @@ from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+import django_filters
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.decorators import api_view, permission_classes
@@ -19,6 +20,7 @@ from rest_framework_simplejwt.views import TokenRefreshView as SimpleJWTRefreshV
 
 from .models import DoctorProfile, PatientProfile, Specialty, User
 from .serializers import (
+    DoctorProfileListSerializer,
     DoctorProfileSerializer,
     PatientProfileSerializer,
     RegisterSerializer,
@@ -267,14 +269,31 @@ class IsProfileOwner(BasePermission):
         return obj.user == request.user or request.user.is_staff
 
 
+class DoctorFilter(django_filters.FilterSet):
+    specialty = django_filters.CharFilter(
+        field_name="specialty__name", lookup_expr="icontains"
+    )
+
+    class Meta:
+        model = DoctorProfile
+        fields = ["specialty"]
+
+
 class DoctorProfileViewSet(viewsets.ModelViewSet):
-    queryset = DoctorProfile.objects.select_related("user").all()
-    serializer_class = DoctorProfileSerializer
+    queryset = DoctorProfile.objects.select_related("user", "specialty").all()
     http_method_names = ["get", "patch", "head", "options"]
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    filterset_class = DoctorFilter
+    search_fields = ["user__username", "user__first_name", "user__last_name", "bio"]
+
+    def get_serializer_class(self):
+        if self.action == "list":
+            return DoctorProfileListSerializer
+        return DoctorProfileSerializer
 
     def get_permissions(self):
         if self.action == "list":
-            return [IsAdminUser()]
+            return [AllowAny()]
         return [IsAuthenticated(), IsProfileOwner()]
 
     def perform_update(self, serializer):

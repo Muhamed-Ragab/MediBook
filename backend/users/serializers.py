@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from rest_framework import serializers
 
 from .models import DoctorProfile, PatientProfile, Specialty
@@ -39,6 +40,38 @@ class PatientProfileSerializer(serializers.ModelSerializer):
         model = PatientProfile
         fields = ["id", "phone", "date_of_birth", "emergency_contact"]
         read_only_fields = ["id"]
+
+
+class DoctorProfileListSerializer(serializers.ModelSerializer):
+    specialty = serializers.SlugRelatedField(
+        slug_field="name", queryset=Specialty.objects.all(), required=False
+    )
+    next_available = serializers.SerializerMethodField()
+    name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DoctorProfile
+        fields = ["id", "name", "specialty", "bio", "phone", "photo_url", "next_available"]
+        read_only_fields = ["id"]
+
+    def get_name(self, obj):
+        return obj.user.get_full_name() or obj.user.username
+
+    def get_next_available(self, obj):
+        from appointments.models import AvailabilitySlot
+
+        next_slot = (
+            AvailabilitySlot.objects.filter(
+                doctor=obj.user,
+                is_booked=False,
+                start_time__gt=timezone.now(),
+            )
+            .order_by("start_time")
+            .first()
+        )
+        if next_slot:
+            return next_slot.start_time
+        return None
 
 
 class RegisterSerializer(serializers.Serializer):

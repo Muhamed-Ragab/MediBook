@@ -31,6 +31,7 @@ INSTALLED_APPS = [
     "corsheaders",
     # Local
     "users",
+    "appointments",
 ]
 
 MIDDLEWARE = [
