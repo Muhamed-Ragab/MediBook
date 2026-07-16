@@ -404,12 +404,14 @@ class TestDoctorProfiles:
         )
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_non_admin_cannot_list_doctors(self, client, patient_user, patient_token):
+    def test_public_can_list_doctors(self, client, patient_user, patient_token, doctor_user):
         response = client.get(
             "/api/doctors/",
             HTTP_AUTHORIZATION=f"Bearer {patient_token}",
         )
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) >= 1
+        assert "next_available" in response.data[0]
 
     def test_admin_can_list_doctors(self, client, admin_token, doctor_user):
         response = client.get(
