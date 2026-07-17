@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAuthStore } from "@/shared/stores/authStore";
-import { useAppointments, useCancelAppointment } from "@/features/booking/api/useDoctors";
+import { useAppointments, useCancelAppointment, useUpdateAppointmentStatus } from "@/features/booking/api/useDoctors";
 import type { Appointment } from "@/features/booking/types";
 
 type Tab = "upcoming" | "past";
@@ -24,6 +24,7 @@ export default function AppointmentsPage() {
 
   const { data: appointments = [], isLoading } = useAppointments();
   const cancelAppointment = useCancelAppointment();
+  const updateStatus = useUpdateAppointmentStatus();
 
   const upcoming = appointments.filter(isUpcoming);
   const past = appointments.filter((a) => !isUpcoming(a));
@@ -50,6 +51,10 @@ export default function AppointmentsPage() {
     if (window.confirm("Cancel this appointment?")) {
       cancelAppointment.mutate(id);
     }
+  }
+
+  function handleUpdateStatus(id: number, status: string) {
+    updateStatus.mutate({ id, status });
   }
 
   const canCancel = (a: Appointment) =>
@@ -115,6 +120,26 @@ export default function AppointmentsPage() {
                   </div>
 
                   <div className="flex gap-2">
+                    {tab === "upcoming" && role === "doctor" && appt.status === "Pending" && (
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-xs"
+                        onClick={() => handleUpdateStatus(appt.id, "Confirmed")}
+                        disabled={updateStatus.isPending}
+                      >
+                        Confirm
+                      </button>
+                    )}
+                    {tab === "upcoming" && role === "doctor" && appt.status === "Confirmed" && (
+                      <button
+                        type="button"
+                        className="btn btn-success btn-xs"
+                        onClick={() => handleUpdateStatus(appt.id, "Completed")}
+                        disabled={updateStatus.isPending}
+                      >
+                        Complete
+                      </button>
+                    )}
                     {tab === "upcoming" && canCancel(appt) && (
                       <button
                         type="button"
@@ -142,6 +167,18 @@ export default function AppointmentsPage() {
         <div className="toast toast-end toast-top">
           <div className="alert alert-error">
             {cancelAppointment.error?.message || "Failed to cancel"}
+          </div>
+        </div>
+      )}
+      {updateStatus.isSuccess && (
+        <div className="toast toast-end toast-top">
+          <div className="alert alert-success">Appointment updated</div>
+        </div>
+      )}
+      {updateStatus.isError && (
+        <div className="toast toast-end toast-top">
+          <div className="alert alert-error">
+            {updateStatus.error?.message || "Failed to update"}
           </div>
         </div>
       )}
