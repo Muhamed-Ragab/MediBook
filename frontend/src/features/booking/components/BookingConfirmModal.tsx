@@ -49,14 +49,11 @@ export default function BookingConfirmModal({
       className="modal modal-open"
       onClick={onClose}
       onKeyDown={handleBackdropKeyDown}
-      role="dialog"
       aria-modal="true"
     >
         <div
           className="modal-box"
           onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
-          role="document"
         >
         <h3 className="font-bold text-lg mb-4">Confirm Booking</h3>
 

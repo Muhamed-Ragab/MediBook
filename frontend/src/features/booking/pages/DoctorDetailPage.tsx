@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, Fragment } from "react";
 import { useParams, useNavigate } from "react-router";
 import { useDoctors, useAvailableSlots, useBookAppointment } from "../api/useDoctors";
 import BookingConfirmModal from "../components/BookingConfirmModal";
@@ -14,15 +14,17 @@ function getMonday(date: Date): Date {
 }
 
 function fmtDate(d: Date): string {
-  return d.toISOString().split("T")[0];
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 const DAYS_OF_WEEK = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const TIME_BLOCKS: string[] = [];
-for (let h = 9; h < 17; h++) {
-  TIME_BLOCKS.push(`${h}:00`);
-  TIME_BLOCKS.push(`${h}:30`);
-}
+
+// Default visible range; expanded dynamically to fit actual slots (see below).
+const DEFAULT_START_HOUR = 9;
+const DEFAULT_END_HOUR = 17;
 
 export default function DoctorDetailPage() {
   const { doctorId } = useParams<{ doctorId: string }>();
@@ -50,6 +52,25 @@ export default function DoctorDetailPage() {
     to,
   );
   const bookAppointment = useBookAppointment();
+
+  // Render time blocks that cover every slot the doctor actually has,
+  // falling back to a 09:00–17:00 default when none exist. This guarantees
+  // slots created at any hour (e.g. early morning or evening) are visible.
+  const TIME_BLOCKS = useMemo(() => {
+    let startHour = DEFAULT_START_HOUR;
+    let endHour = DEFAULT_END_HOUR;
+    for (const slot of availableSlots) {
+      const h = new Date(slot.start_time).getHours();
+      if (h < startHour) startHour = h;
+      if (h + 1 > endHour) endHour = h + 1;
+    }
+    const blocks: string[] = [];
+    for (let h = startHour; h < endHour; h++) {
+      blocks.push(`${h}:00`);
+      blocks.push(`${h}:30`);
+    }
+    return blocks;
+  }, [availableSlots]);
 
   const slotMap = useMemo(() => {
     const map = new Map<string, AvailableSlot>();
@@ -184,7 +205,9 @@ export default function DoctorDetailPage() {
         })}
 
         {TIME_BLOCKS.map((timeStr) => (
-          <>
+          <Fragment
+            key={timeStr}
+          >
             <div
               key={`l-${timeStr}`}
               className="bg-base-100 p-1 text-xs text-base-content/50 text-right pr-1"
@@ -218,6 +241,11 @@ export default function DoctorDetailPage() {
                     }
                   }}
                   role="gridcell"
+                  aria-label={
+                    slot && !slot.is_booked && !isPast
+                      ? "Click to book"
+                      : `Slot ${timeStr}`
+                  }
                   tabIndex={slot && !slot.is_booked && !isPast ? 0 : -1}
                   title={
                     slot && !slot.is_booked && !isPast
@@ -227,7 +255,7 @@ export default function DoctorDetailPage() {
                 />
               );
             })}
-          </>
+          </Fragment>
         ))}
       </div>
 

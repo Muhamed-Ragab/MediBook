@@ -7,7 +7,7 @@ interface WeeklyCalendarProps {
   doctorId: number;
   readOnly?: boolean;
   onCreateSlot: (startTime: string, endTime: string) => void;
-  onDeleteSlot: (slotId: number) => void;
+  onRequestDeleteSlot: (slot: AvailabilitySlot) => void;
   isPending?: boolean;
 }
 
@@ -34,7 +34,7 @@ export default function WeeklyCalendar({
   slots,
   readOnly = false,
   onCreateSlot,
-  onDeleteSlot,
+  onRequestDeleteSlot,
   isPending,
 }: WeeklyCalendarProps) {
   const monday = getMonday(weekStart);
@@ -66,9 +66,7 @@ export default function WeeklyCalendar({
     const existing = slotMap.get(key);
     if (existing) {
       if (!existing.is_booked) {
-        if (window.confirm("Delete this slot?")) {
-          onDeleteSlot(existing.id);
-        }
+        onRequestDeleteSlot(existing);
       }
       return;
     }
@@ -146,6 +144,7 @@ export default function WeeklyCalendar({
                     }
                   }}
                   role="gridcell"
+                  aria-label={title || `Slot ${timeStr}`}
                   tabIndex={slot || (!past && !readOnly) ? 0 : -1}
                 />
               );

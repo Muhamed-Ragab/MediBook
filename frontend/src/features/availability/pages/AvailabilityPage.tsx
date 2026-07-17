@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import WeeklyCalendar from "../components/WeeklyCalendar";
 import WeekNavigator from "../components/WeekNavigator";
 import WeekTemplateGenerator from "../components/WeekTemplateGenerator";
+import SlotDeleteModal from "../components/SlotDeleteModal";
 import {
   useSlots,
   useCreateSlot,
@@ -9,6 +10,7 @@ import {
   useDeleteSlot,
 } from "../api/useSlots";
 import { useDoctorProfile } from "@/features/profile/api/profileApi";
+import type { AvailabilitySlot } from "../types";
 
 function getMonday(date: Date): Date {
   const d = new Date(date);
@@ -41,6 +43,9 @@ export default function AvailabilityPage() {
   const bulkCreate = useBulkCreateSlots(doctorId);
   const deleteSlot = useDeleteSlot(doctorId);
 
+  const [pendingDeleteSlot, setPendingDeleteSlot] =
+    useState<AvailabilitySlot | null>(null);
+
   const handlePrev = useCallback(
     () => setWeekStart((prev) => addWeeks(prev, -1)),
     [],
@@ -57,12 +62,16 @@ export default function AvailabilityPage() {
     [createSlot],
   );
 
-  const handleDeleteSlot = useCallback(
-    (slotId: number) => {
-      deleteSlot.mutate(slotId);
-    },
-    [deleteSlot],
-  );
+  const handleRequestDeleteSlot = useCallback((slot: AvailabilitySlot) => {
+    setPendingDeleteSlot(slot);
+  }, []);
+
+  const handleConfirmDeleteSlot = useCallback(() => {
+    if (!pendingDeleteSlot) return;
+    deleteSlot.mutate(pendingDeleteSlot.id, {
+      onSuccess: () => setPendingDeleteSlot(null),
+    });
+  }, [deleteSlot, pendingDeleteSlot]);
 
   const handleGenerateWeek = useCallback(
     (slots: { start_time: string; end_time: string }[]) => {
@@ -91,7 +100,7 @@ export default function AvailabilityPage() {
           slots={slots}
           doctorId={doctorId}
           onCreateSlot={handleCreateSlot}
-          onDeleteSlot={handleDeleteSlot}
+          onRequestDeleteSlot={handleRequestDeleteSlot}
           isPending={createSlot.isPending || deleteSlot.isPending}
         />
       )}
@@ -135,6 +144,13 @@ export default function AvailabilityPage() {
           </div>
         </div>
       )}
+
+      <SlotDeleteModal
+        slot={pendingDeleteSlot}
+        isPending={deleteSlot.isPending}
+        onConfirm={handleConfirmDeleteSlot}
+        onClose={() => setPendingDeleteSlot(null)}
+      />
     </div>
   );
 }
