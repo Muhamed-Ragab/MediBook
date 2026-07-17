@@ -10,11 +10,8 @@ export interface AdminUser {
   email_verified: boolean;
 }
 
-export interface Specialty {
-  id: number;
-  name: string;
-  description: string;
-}
+// Public catalog type lives in shared; re-exported here for backward compatibility.
+export type { Specialty } from "@/shared/types";
 
 export interface SpecialtyFormData {
   name: string;

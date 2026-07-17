@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { registerApi } from "@/features/auth/api";
-import { useSpecialties } from "@/features/admin/api/adminApi";
+import { useSpecialties } from "@/shared/api/specialties";
 import { registerSchema } from "../constants";
 import type { RegisterForm } from "../types";
 

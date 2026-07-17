@@ -99,6 +99,7 @@ export default function AdminAppointments() {
           type="text"
           placeholder="Search by patient or doctor name..."
           className="grow"
+          aria-label="Search appointments by patient or doctor name"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />

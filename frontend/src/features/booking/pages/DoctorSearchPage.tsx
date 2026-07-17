@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { useSpecialties } from "@/features/admin/api/adminApi";
+import { useSpecialties } from "@/shared/api/specialties";
 import DoctorCard from "../components/DoctorCard";
 import { useDoctors } from "../api/useDoctors";
 

@@ -25,6 +25,12 @@ export interface LoginFormData {
   password: string;
 }
 
+export interface Specialty {
+  id: number;
+  name: string;
+  description: string;
+}
+
 export interface RegisterFormData {
   email: string;
   password: string;

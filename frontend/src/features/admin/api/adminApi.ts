@@ -1,6 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/shared/utils/api";
+import { useSpecialties } from "@/shared/api/specialties";
 import type { AdminUser, Specialty, SpecialtyFormData, UserUpdateData, DashboardStats } from "../types";
+
+// Re-exported so existing admin code and tests keep importing from this module.
+export { useSpecialties };
+export type { Specialty };
 
 export function useUsers() {
   return useQuery<AdminUser[]>({
@@ -27,19 +32,12 @@ export function useDashboardStats() {
   });
 }
 
-export function useSpecialties() {
-  return useQuery<Specialty[]>({
-    queryKey: ["admin", "specialties"],
-    queryFn: () => api.get<Specialty[]>("/specialties/"),
-  });
-}
-
 export function useCreateSpecialty() {
   const queryClient = useQueryClient();
   return useMutation<Specialty, Error, SpecialtyFormData>({
     mutationFn: (data) => api.post<Specialty>("/specialties/", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "specialties"] });
+      queryClient.invalidateQueries({ queryKey: ["specialties"] });
     },
   });
 }
@@ -50,7 +48,7 @@ export function useUpdateSpecialty() {
     mutationFn: ({ id, data }) =>
       api.patch<Specialty>(`/specialties/${id}/`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "specialties"] });
+      queryClient.invalidateQueries({ queryKey: ["specialties"] });
     },
   });
 }
@@ -60,7 +58,7 @@ export function useDeleteSpecialty() {
   return useMutation<void, Error, number>({
     mutationFn: (id) => api.delete(`/specialties/${id}/`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "specialties"] });
+      queryClient.invalidateQueries({ queryKey: ["specialties"] });
     },
   });
 }
