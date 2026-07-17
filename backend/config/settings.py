@@ -106,6 +106,7 @@ REST_FRAMEWORK = {
         "rest_framework.renderers.JSONRenderer",
         "rest_framework.renderers.BrowsableAPIRenderer",
     ),
+    "EXCEPTION_HANDLER": "config.exception_handler.exception_handler",
 }
 
 # SimpleJWT
@@ -120,19 +121,18 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
 ]
 
-FRONTEND_URL = "http://localhost:5173"
-CORS_ALLOW_CREDENTIALS = True
+# Email / SMTP
+# Set these in .env to enable real SMTP sending (console backend used otherwise).
+# See .env.example for the full list of keys.
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True").lower() == "true"
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@medibook.com")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
 
-if os.environ.get("EMAIL_HOST_USER"):
+if EMAIL_HOST_USER:
     EMAIL_BACKEND = "config.email_backend.ResolvedEmailBackend"
-    EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
-    EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
-    EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True").lower() == "true"
-    EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
-    DEFAULT_FROM_EMAIL = os.environ.get(
-        "DEFAULT_FROM_EMAIL",
-        os.environ["EMAIL_HOST_USER"],  # Gmail requires sender = authenticated user
-    )
 else:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
-    DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@medibook.com")

@@ -10,7 +10,12 @@ from rest_framework.response import Response
 from users.models import DoctorProfile
 
 from .models import Appointment, AvailabilitySlot
-from .notifications import send_appointment_email
+from .notifications import (
+    notify_appointment_booked,
+    notify_appointment_confirmed,
+    notify_appointment_cancelled,
+    notify_appointment_completed,
+)
 from .serializers import AppointmentSerializer, SlotSerializer
 
 
@@ -212,10 +217,12 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             appointment.save(update_fields=["status"])
 
         serializer = self.get_serializer(appointment)
-        send_appointment_email(
-            appointment,
-            subject=f"Appointment {appointment.get_status_display()} — MediBook",
-        )
+        if new_status == "Confirmed":
+            notify_appointment_confirmed(appointment)
+        elif new_status == "Cancelled":
+            notify_appointment_cancelled(appointment)
+        elif new_status == "Completed":
+            notify_appointment_completed(appointment)
         return Response({"success": True, "data": serializer.data, "error": None})
 
     def create(self, request, *args, **kwargs):
@@ -267,10 +274,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             patient=request.user,
             slot=slot,
         )
-        send_appointment_email(
-            appointment,
-            subject=f"Appointment Booked — MediBook",
-        )
+        notify_appointment_booked(appointment)
         serializer = self.get_serializer(appointment)
         return Response(
             {"success": True, "data": serializer.data, "error": None},
@@ -291,9 +295,9 @@ def available_slots_view(request, doctor_pk):
     from_date = request.query_params.get("from")
     to_date = request.query_params.get("to")
     if from_date:
-        slots = slots.filter(start_time__gte=from_date)
+        slots = slots.filter(start_time__date__gte=from_date)
     if to_date:
-        slots = slots.filter(end_time__lte=to_date)
+        slots = slots.filter(start_time__date__lte=to_date)
 
     slots = slots.order_by("start_time")
     serializer = SlotSerializer(slots, many=True)

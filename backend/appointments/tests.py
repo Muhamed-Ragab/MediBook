@@ -87,7 +87,7 @@ class TestAvailabilitySlots:
             HTTP_AUTHORIZATION=f"Bearer {doctor_token}",
         )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "end_time" in response.data
+        assert "end_time" in response.data["error"]
 
     def test_enforces_30_min_boundary(self, client, doctor_user, doctor_token):
         start = _future_time(9, 15)
@@ -100,7 +100,7 @@ class TestAvailabilitySlots:
             HTTP_AUTHORIZATION=f"Bearer {doctor_token}",
         )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "start_time" in response.data
+        assert "start_time" in response.data["error"]
 
     def test_rejects_past_slot(self, client, doctor_user, doctor_token):
         past = timezone.now() - timedelta(hours=1)
