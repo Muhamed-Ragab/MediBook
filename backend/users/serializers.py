@@ -96,6 +96,10 @@ class RegisterSerializer(serializers.Serializer):
     def validate(self, data):
         if data.get("role") == "doctor" and not data.get("specialty"):
             raise serializers.ValidationError({"specialty": "Specialty is required for doctors."})
+        if data.get("role") == "doctor" and data.get("specialty"):
+            specialty_qs = Specialty.objects.filter(name__iexact=data["specialty"])
+            if specialty_qs.exists():
+                data["specialty"] = specialty_qs.first().name
         return data
 
     def create(self, validated_data):

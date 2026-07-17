@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import { useRegister } from "@/features/auth/hooks/useRegister";
+import { PasswordInput } from "@/shared/components/PasswordInput";
 
 export default function RegisterPage() {
   const {
@@ -11,6 +12,8 @@ export default function RegisterPage() {
     handleSubmit,
     errors,
     handleRoleChange,
+    specialties,
+    specialtiesLoading,
   } = useRegister();
 
   if (isSuccess) {
@@ -138,13 +141,26 @@ export default function RegisterPage() {
             <label className="label py-1" htmlFor="specialty">
               <span className="label-text text-sm font-medium">Specialty</span>
             </label>
-            <input
-              id="specialty"
-              type="text"
-              placeholder="e.g. Cardiology, Pediatrics"
-              className="input input-bordered w-full text-sm"
-              {...register("specialty")}
-            />
+            {specialtiesLoading ? (
+              <select className="select select-bordered w-full text-sm" disabled>
+                <option>Loading specialties...</option>
+              </select>
+            ) : (
+              <select
+                id="specialty"
+                className={`select select-bordered w-full text-sm ${errors.specialty ? "select-error" : ""}`}
+                defaultValue=""
+                {...register("specialty")}
+              >
+                <option value="" disabled>Select a specialty</option>
+                {specialties?.map((s) => (
+                  <option key={s.id} value={s.name}>{s.name}</option>
+                ))}
+              </select>
+            )}
+            {errors.specialty && (
+              <p className="text-xs text-error mt-1">{errors.specialty.message}</p>
+            )}
           </fieldset>
         )}
 
@@ -152,14 +168,11 @@ export default function RegisterPage() {
           <label className="label py-1" htmlFor="password">
             <span className="label-text text-sm font-medium">Password</span>
           </label>
-          <input
+          <PasswordInput
             id="password"
-            type="password"
             placeholder="At least 8 characters"
-            className={`input input-bordered w-full text-sm ${
-              errors.password ? "input-error" : ""
-            }`}
             autoComplete="new-password"
+            hasError={!!errors.password}
             {...register("password")}
           />
           {errors.password && (
@@ -171,14 +184,11 @@ export default function RegisterPage() {
           <label className="label py-1" htmlFor="confirmPassword">
             <span className="label-text text-sm font-medium">Confirm password</span>
           </label>
-          <input
+          <PasswordInput
             id="confirmPassword"
-            type="password"
             placeholder="Repeat your password"
-            className={`input input-bordered w-full text-sm ${
-              errors.confirmPassword ? "input-error" : ""
-            }`}
             autoComplete="new-password"
+            hasError={!!errors.confirmPassword}
             {...register("confirmPassword")}
           />
           {errors.confirmPassword && (

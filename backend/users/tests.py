@@ -94,6 +94,64 @@ class TestRegister:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
+class TestDoctorRegistrationValidation:
+    def test_register_doctor_missing_specialty(self, client):
+        """Doctor registration without specialty returns 400."""
+        data = {
+            "email": "doctor_no_spec@example.com",
+            "password": "strongpass123",
+            "role": "doctor",
+            "first_name": "No",
+            "last_name": "Spec",
+        }
+        response = client.post("/api/auth/register/", data, format="json")
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "specialty" in str(response.data["error"]).lower()
+
+    def test_register_doctor_invalid_specialty(self, client):
+        """Doctor registration with non-existent specialty creates it via get_or_create."""
+        data = {
+            "email": "doctor_bad_spec@example.com",
+            "password": "strongpass123",
+            "role": "doctor",
+            "specialty": "NonExistentSpecialty",
+        }
+        response = client.post("/api/auth/register/", data, format="json")
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["data"]["user"]["doctor_profile"]["specialty"] == "NonExistentSpecialty"
+        assert Specialty.objects.filter(name="NonExistentSpecialty").exists()
+
+    def test_register_doctor_specialty_case_insensitive(self, client):
+        """Doctor registration with lowercase 'cardiology' matches existing 'Cardiology'."""
+        Specialty.objects.get_or_create(name="Cardiology")
+        data = {
+            "email": "doctor_case@example.com",
+            "password": "strongpass123",
+            "role": "doctor",
+            "specialty": "cardiology",
+        }
+        response = client.post("/api/auth/register/", data, format="json")
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["data"]["user"]["role"] == "doctor"
+        assert response.data["data"]["user"]["doctor_profile"]["specialty"] == "Cardiology"
+
+    def test_register_patient_with_specialty_ignored(self, client):
+        """Patient registration with specialty field succeeds and ignores it."""
+        data = {
+            "email": "patient_with_spec@example.com",
+            "password": "strongpass123",
+            "role": "patient",
+            "specialty": "Cardiology",
+        }
+        response = client.post("/api/auth/register/", data, format="json")
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["data"]["user"]["role"] == "patient"
+
+
 class TestLogin:
     def test_login_success(self, client, doctor_user):
         """Happy path: valid credentials return JWT tokens."""
@@ -420,6 +478,57 @@ class TestDoctorProfiles:
         )
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) >= 1
+
+
+class TestDoctorProfileDetail:
+    def test_doctor_gets_own_profile(self, client, doctor_user, doctor_token):
+        """Doctor retrieves own profile with full data."""
+        profile_id = doctor_user.doctor_profile.id
+        response = client.get(
+            f"/api/doctors/{profile_id}/",
+            HTTP_AUTHORIZATION=f"Bearer {doctor_token}",
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["specialty"] == "Cardiology"
+        assert "bio" in response.data
+        assert "phone" in response.data
+
+    def test_public_can_get_doctor_profile(self, client, doctor_user):
+        """Unauthenticated request can view a doctor profile."""
+        profile_id = doctor_user.doctor_profile.id
+        response = client.get(f"/api/doctors/{profile_id}/")
+
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_doctor_profile_not_found(self, client):
+        """GET for non-existent doctor profile returns 404."""
+        response = client.get("/api/doctors/99999/")
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_doctor_updates_specialty(self, client, doctor_user, doctor_token):
+        """Doctor updates specialty; verify with GET."""
+        profile_id = doctor_user.doctor_profile.id
+        Specialty.objects.get_or_create(name="Neurology")
+        response = client.patch(
+            f"/api/doctors/{profile_id}/",
+            {"specialty": "Neurology"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {doctor_token}",
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["specialty"] == "Neurology"
+
+        # Verify with GET
+        response = client.get(
+            f"/api/doctors/{profile_id}/",
+            HTTP_AUTHORIZATION=f"Bearer {doctor_token}",
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["specialty"] == "Neurology"
 
 
 class TestPatientProfiles:

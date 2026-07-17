@@ -58,7 +58,18 @@ export function useCancelAppointment() {
   const queryClient = useQueryClient();
   return useMutation<Appointment, Error, number>({
     mutationFn: (id) =>
-      api.patch<Appointment>(`/appointments/${id}/`, { status: "Cancelled" }),
+      api.patch<Appointment>(`/appointments/${id}/status/`, { status: "Cancelled" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["appointments"] });
+    },
+  });
+}
+
+export function useUpdateAppointmentStatus() {
+  const queryClient = useQueryClient();
+  return useMutation<Appointment, Error, { id: number; status: string }>({
+    mutationFn: ({ id, status }) =>
+      api.patch<Appointment>(`/appointments/${id}/status/`, { status }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["appointments"] });
     },

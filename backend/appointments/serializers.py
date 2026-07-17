@@ -53,7 +53,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
             "status", "doctor_notes", "created_at", "updated_at",
         ]
         read_only_fields = [
-            "id", "patient", "patient_name", "status",
+            "id", "patient", "patient_name",
             "created_at", "updated_at", "slot_details",
         ]
         extra_kwargs = {"slot": {"write_only": True}}
