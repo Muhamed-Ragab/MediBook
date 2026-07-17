@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { registerApi } from "@/features/auth/api";
+import { useSpecialties } from "@/features/admin/api/adminApi";
 import { registerSchema } from "../constants";
 import type { RegisterForm } from "../types";
 
@@ -10,6 +11,8 @@ export function useRegister() {
   const [serverError, setServerError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+
+  const { data: specialties, isLoading: specialtiesLoading } = useSpecialties();
 
   const {
     register,
@@ -66,6 +69,8 @@ export function useRegister() {
     register,
     handleSubmit: handleSubmit(onSubmit),
     errors,
-    handleRoleChange
+    handleRoleChange,
+    specialties,
+    specialtiesLoading,
   };
 }
