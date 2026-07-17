@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<body style="font-family:sans-serif;padding:24px;background:#f4f7f9">
+<table align="center" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;background:#fff;border-radius:12px;overflow:hidden">
+<tr><td style="background:#0d3b48;padding:24px;text-align:center;color:#fff;font-size:20px;font-weight:bold">MediBook</td></tr>
+<tr><td style="padding:24px">
+<p style="margin:0 0 16px;color:#333">Hi {{ patient_name }},</p>
+<p style="margin:0 0 16px;color:#555">
+  Your appointment with <strong>Dr. {{ doctor_name }}</strong>
+  on <strong>{{ date }}</strong> at <strong>{{ time }}</strong>
+  is <strong>{{ status }}</strong>.
+</p>
+{% if status == "Confirmed" %}
+<p style="margin:0 0 16px;color:#555">Please arrive on time. If you need to reschedule, please cancel at least 24 hours in advance.</p>
+{% elif status == "Completed" %}
+<p style="margin:0 0 16px;color:#555">Thank you for visiting Dr. {{ doctor_name }}. We hope you had a great experience.</p>
+{% elif status == "Cancelled" %}
+<p style="margin:0 0 16px;color:#555">If you'd like to book a new appointment, please visit our portal.</p>
+{% endif %}
+<table cellpadding="0" cellspacing="0" style="margin:24px auto"><tr><td style="background:#0d3b48;border-radius:8px;padding:12px 32px">
+<a href="{{ frontend_url }}/patient/appointments" style="color:#fff;text-decoration:none;font-size:15px;font-weight:bold;display:inline-block">View Appointments</a>
+</td></tr></table>
+<p style="margin:16px 0 0;color:#999;font-size:13px">Appointment #{{ appointment_id }}</p>
+</td></tr>
+<tr><td style="background:#eee;padding:16px;text-align:center;color:#888;font-size:12px">MediBook &mdash; Medical Appointment System</td></tr>
+</table></body></html>
