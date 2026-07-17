@@ -2,6 +2,7 @@ from datetime import timedelta
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.test import Client
 from django.utils import timezone
 from rest_framework import status
@@ -512,6 +513,355 @@ class TestBooking:
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
+class TestAppointmentStatusTransition:
+    """Tests for appointment state machine with role-gating.
+    
+    Valid transitions:
+      Pending → Confirmed (doctor), Cancelled (doctor/patient)
+      Confirmed → Completed (doctor), Cancelled (doctor/patient)
+      Completed → [] (terminal)
+      Cancelled → [] (terminal)
+    """
+
+    def _book_appointment(self, client, patient_token, doctor_user):
+        """Helper: create a slot and book it, return (appointment, slot)."""
+        start = _future_time(9, 0)
+        slot = AvailabilitySlot.objects.create(
+            doctor=doctor_user,
+            start_time=start,
+            end_time=start + timedelta(minutes=30),
+        )
+        response = client.post(
+            "/api/appointments/",
+            {"slot": slot.id},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {patient_token}",
+        )
+        return response.data["data"], slot
+
+    def test_doctor_confirms_pending(self, client, doctor_user, patient_user, patient_token, doctor_token):
+        appt, _ = self._book_appointment(client, patient_token, doctor_user)
+        response = client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Confirmed"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {doctor_token}",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["data"]["status"] == "Confirmed"
+
+    def test_patient_cancels_pending(self, client, doctor_user, patient_user, patient_token, doctor_token):
+        appt, slot = self._book_appointment(client, patient_token, doctor_user)
+        response = client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Cancelled"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {patient_token}",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["data"]["status"] == "Cancelled"
+        slot.refresh_from_db()
+        assert slot.is_booked is False
+
+    def test_doctor_rejects_pending(self, client, doctor_user, patient_user, patient_token, doctor_token):
+        appt, slot = self._book_appointment(client, patient_token, doctor_user)
+        response = client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Cancelled"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {doctor_token}",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["data"]["status"] == "Cancelled"
+        slot.refresh_from_db()
+        assert slot.is_booked is False
+
+    def test_doctor_completes_confirmed(self, client, doctor_user, patient_user, patient_token, doctor_token):
+        appt, _ = self._book_appointment(client, patient_token, doctor_user)
+        # First confirm
+        client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Confirmed"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {doctor_token}",
+        )
+        # Then complete
+        response = client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Completed"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {doctor_token}",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["data"]["status"] == "Completed"
+
+    def test_patient_cancels_confirmed(self, client, doctor_user, patient_user, patient_token, doctor_token):
+        appt, slot = self._book_appointment(client, patient_token, doctor_user)
+        # Doctor confirms
+        client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Confirmed"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {doctor_token}",
+        )
+        # Patient cancels
+        response = client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Cancelled"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {patient_token}",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["data"]["status"] == "Cancelled"
+        slot.refresh_from_db()
+        assert slot.is_booked is False
+
+    def test_invalid_transition_completed_to_confirmed(self, client, doctor_user, patient_user, patient_token, doctor_token):
+        appt, _ = self._book_appointment(client, patient_token, doctor_user)
+        client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Confirmed"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {doctor_token}",
+        )
+        client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Completed"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {doctor_token}",
+        )
+        response = client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Confirmed"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {doctor_token}",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_invalid_transition_cancelled_to_pending(self, client, doctor_user, patient_user, patient_token, doctor_token):
+        appt, _ = self._book_appointment(client, patient_token, doctor_user)
+        client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Cancelled"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {patient_token}",
+        )
+        response = client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Pending"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {patient_token}",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_invalid_transition_cancelled_to_confirmed(self, client, doctor_user, patient_user, patient_token, doctor_token):
+        appt, _ = self._book_appointment(client, patient_token, doctor_user)
+        client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Cancelled"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {patient_token}",
+        )
+        response = client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Confirmed"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {doctor_token}",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_patient_cannot_confirm(self, client, doctor_user, patient_user, patient_token, doctor_token):
+        appt, _ = self._book_appointment(client, patient_token, doctor_user)
+        response = client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Confirmed"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {patient_token}",
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_patient_cannot_complete(self, client, doctor_user, patient_user, patient_token, doctor_token):
+        appt, _ = self._book_appointment(client, patient_token, doctor_user)
+        client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Confirmed"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {doctor_token}",
+        )
+        response = client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Completed"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {patient_token}",
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_doctor_cannot_confirm_another_doctors_appointment(self, client, doctor_user, patient_user, patient_token):
+        other_doctor = User.objects.create_user(
+            username="otherdoc_state",
+            email="otherdoc_state@test.com",
+            password="pass1234",
+            role="doctor",
+            email_verified=True,
+        )
+        from users.models import DoctorProfile, Specialty
+        DoctorProfile.objects.create(
+            user=other_doctor,
+            specialty=Specialty.objects.get_or_create(name="Dermatology")[0],
+        )
+        refresh = __import__("rest_framework_simplejwt").tokens.RefreshToken.for_user(other_doctor)
+        other_doctor_token = str(refresh.access_token)
+
+        appt, _ = self._book_appointment(client, patient_token, doctor_user)
+        response = client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Confirmed"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {other_doctor_token}",
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_patient_cannot_cancel_another_patients_appointment(self, client, doctor_user, patient_user, patient_token):
+        other_patient = User.objects.create_user(
+            username="otherpatient_state",
+            email="otherpatient_state@test.com",
+            password="pass1234",
+            role="patient",
+            email_verified=True,
+        )
+        from users.models import PatientProfile
+        PatientProfile.objects.create(user=other_patient)
+        refresh = __import__("rest_framework_simplejwt").tokens.RefreshToken.for_user(other_patient)
+        other_patient_token = str(refresh.access_token)
+
+        appt, _ = self._book_appointment(client, patient_token, doctor_user)
+        response = client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Cancelled"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {other_patient_token}",
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_doctor_cannot_complete_another_doctors_appointment(self, client, doctor_user, patient_user, patient_token, doctor_token):
+        other_doctor = User.objects.create_user(
+            username="otherdoc2_state",
+            email="otherdoc2_state@test.com",
+            password="pass1234",
+            role="doctor",
+            email_verified=True,
+        )
+        from users.models import DoctorProfile, Specialty
+        DoctorProfile.objects.create(
+            user=other_doctor,
+            specialty=Specialty.objects.get_or_create(name="Dermatology")[0],
+        )
+        refresh = __import__("rest_framework_simplejwt").tokens.RefreshToken.for_user(other_doctor)
+        other_doctor_token = str(refresh.access_token)
+
+        appt, _ = self._book_appointment(client, patient_token, doctor_user)
+        client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Confirmed"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {doctor_token}",
+        )
+        response = client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Completed"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {other_doctor_token}",
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_pending_to_completed_rejected(self, client, doctor_user, patient_user, patient_token, doctor_token):
+        """Pending→Completed directly must be rejected (must go through Confirmed)."""
+        appt, _ = self._book_appointment(client, patient_token, doctor_user)
+        response = client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Completed"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {doctor_token}",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_unauthenticated_cannot_change_status(self, client, doctor_user, patient_user, patient_token):
+        """No auth header on PATCH status must return 401."""
+        appt, _ = self._book_appointment(client, patient_token, doctor_user)
+        response = client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Confirmed"},
+            content_type="application/json",
+        )
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_doctor_cancels_confirmed(self, client, doctor_user, patient_user, patient_token, doctor_token):
+        """Doctor cancels a Confirmed appointment; slot must re-open."""
+        appt, slot = self._book_appointment(client, patient_token, doctor_user)
+        # Confirm first
+        client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Confirmed"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {doctor_token}",
+        )
+        # Doctor cancels
+        response = client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Cancelled"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {doctor_token}",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["data"]["status"] == "Cancelled"
+        slot.refresh_from_db()
+        assert slot.is_booked is False
+
+    def test_cancelled_appointment_cancel_idempotent(self, client, doctor_user, patient_user, patient_token, doctor_token):
+        """PATCH Cancelled on already Cancelled appointment must return 400."""
+        appt, _ = self._book_appointment(client, patient_token, doctor_user)
+        # Cancel once
+        client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Cancelled"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {patient_token}",
+        )
+        # Cancel again — should fail
+        response = client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Cancelled"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {patient_token}",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_completed_appointment_complete_idempotent(self, client, doctor_user, patient_user, patient_token, doctor_token):
+        """PATCH Completed on already Completed appointment must return 400."""
+        appt, _ = self._book_appointment(client, patient_token, doctor_user)
+        # Confirm then complete
+        client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Confirmed"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {doctor_token}",
+        )
+        client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Completed"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {doctor_token}",
+        )
+        # Complete again — should fail
+        response = client.patch(
+            f"/api/appointments/{appt['id']}/status/",
+            {"status": "Completed"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {doctor_token}",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
 class TestAppointmentListing:
     def test_patient_sees_own_appointments(
         self, client, doctor_user, patient_user, patient_token
@@ -619,3 +969,258 @@ class TestAppointmentListing:
         assert response.status_code == status.HTTP_200_OK
         assert response.data["slot_details"] is not None
         assert response.data["slot_details"]["doctor_name"] is not None
+
+
+class TestAppointmentListingFilters:
+    def test_patient_filters_by_status(
+        self, client, doctor_user, patient_user, patient_token
+    ):
+        start1 = _future_time(9, 0)
+        slot1 = AvailabilitySlot.objects.create(
+            doctor=doctor_user,
+            start_time=start1,
+            end_time=start1 + timedelta(minutes=30),
+            is_booked=True,
+        )
+        Appointment.objects.create(patient=patient_user, slot=slot1, status="Pending")
+
+        start2 = _future_time(9, 30)
+        slot2 = AvailabilitySlot.objects.create(
+            doctor=doctor_user,
+            start_time=start2,
+            end_time=start2 + timedelta(minutes=30),
+            is_booked=True,
+        )
+        Appointment.objects.create(patient=patient_user, slot=slot2, status="Confirmed")
+
+        response = client.get(
+            "/api/appointments/?status=Pending",
+            HTTP_AUTHORIZATION=f"Bearer {patient_token}",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
+        assert response.data[0]["status"] == "Pending"
+
+    def test_doctor_filters_by_status(
+        self, client, doctor_user, patient_user, doctor_token
+    ):
+        start1 = _future_time(9, 0)
+        slot1 = AvailabilitySlot.objects.create(
+            doctor=doctor_user,
+            start_time=start1,
+            end_time=start1 + timedelta(minutes=30),
+            is_booked=True,
+        )
+        Appointment.objects.create(
+            patient=patient_user, slot=slot1, status="Confirmed"
+        )
+
+        start2 = _future_time(9, 30)
+        slot2 = AvailabilitySlot.objects.create(
+            doctor=doctor_user,
+            start_time=start2,
+            end_time=start2 + timedelta(minutes=30),
+            is_booked=True,
+        )
+        Appointment.objects.create(
+            patient=patient_user, slot=slot2, status="Completed"
+        )
+
+        response = client.get(
+            "/api/appointments/?status=Confirmed",
+            HTTP_AUTHORIZATION=f"Bearer {doctor_token}",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
+        assert response.data[0]["status"] == "Confirmed"
+
+    def test_patient_empty_appointment_list(
+        self, client, patient_user, patient_token
+    ):
+        response = client.get(
+            "/api/appointments/",
+            HTTP_AUTHORIZATION=f"Bearer {patient_token}",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data == []
+
+    def test_appointments_ordered_by_date(
+        self, client, doctor_user, patient_user, patient_token
+    ):
+        start_early = _future_time(9, 0)
+        start_later = _future_time(9, 30) + timedelta(days=7)
+
+        slot1 = AvailabilitySlot.objects.create(
+            doctor=doctor_user,
+            start_time=start_early,
+            end_time=start_early + timedelta(minutes=30),
+            is_booked=True,
+        )
+        Appointment.objects.create(patient=patient_user, slot=slot1, status="Pending")
+
+        slot2 = AvailabilitySlot.objects.create(
+            doctor=doctor_user,
+            start_time=start_later,
+            end_time=start_later + timedelta(minutes=30),
+            is_booked=True,
+        )
+        Appointment.objects.create(patient=patient_user, slot=slot2, status="Confirmed")
+
+        response = client.get(
+            "/api/appointments/",
+            HTTP_AUTHORIZATION=f"Bearer {patient_token}",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 2
+        assert response.data[0]["slot_details"]["start_time"] < response.data[1]["slot_details"]["start_time"]
+
+    def test_patient_sees_only_upcoming_statuses(
+        self, client, doctor_user, patient_user, patient_token
+    ):
+        times = [
+            _future_time(9, 0),
+            _future_time(9, 30),
+            _future_time(10, 0),
+            _future_time(10, 30),
+        ]
+        statuses = ["Pending", "Confirmed", "Completed", "Cancelled"]
+        for t, s in zip(times, statuses):
+            slot = AvailabilitySlot.objects.create(
+                doctor=doctor_user,
+                start_time=t,
+                end_time=t + timedelta(minutes=30),
+                is_booked=True,
+            )
+            Appointment.objects.create(
+                patient=patient_user, slot=slot, status=s
+            )
+
+        response = client.get(
+            "/api/appointments/",
+            HTTP_AUTHORIZATION=f"Bearer {patient_token}",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        returned_statuses = {a["status"] for a in response.data}
+        assert returned_statuses == {"Pending", "Confirmed"}
+
+
+class TestEmailNotifications:
+    @pytest.fixture(autouse=True)
+    def _use_locmem_email(self, settings):
+        settings.EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+
+    def _create_slot(self, doctor_user):
+        start = _future_time(9, 0)
+        return AvailabilitySlot.objects.create(
+            doctor=doctor_user,
+            start_time=start,
+            end_time=start + timedelta(minutes=30),
+        )
+
+    def test_email_on_booking(self, client, doctor_user, patient_user, patient_token):
+        slot = self._create_slot(doctor_user)
+        response = client.post(
+            "/api/appointments/",
+            {"slot": slot.id},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {patient_token}",
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert len(mail.outbox) == 1
+        msg = mail.outbox[0]
+        assert "Booked" in msg.subject
+        assert patient_user.email in msg.to
+        assert doctor_user.email in msg.to
+
+    def test_email_on_confirmation(self, client, doctor_user, patient_user, patient_token, doctor_token):
+        slot = self._create_slot(doctor_user)
+        appt_resp = client.post(
+            "/api/appointments/",
+            {"slot": slot.id},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {patient_token}",
+        )
+        mail.outbox.clear()
+        appt_id = appt_resp.data["data"]["id"]
+        response = client.patch(
+            f"/api/appointments/{appt_id}/status/",
+            {"status": "Confirmed"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {doctor_token}",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert len(mail.outbox) == 1
+        assert "Confirmed" in mail.outbox[0].subject
+
+    def test_email_on_cancellation(self, client, doctor_user, patient_user, patient_token):
+        slot = self._create_slot(doctor_user)
+        appt_resp = client.post(
+            "/api/appointments/",
+            {"slot": slot.id},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {patient_token}",
+        )
+        mail.outbox.clear()
+        appt_id = appt_resp.data["data"]["id"]
+        response = client.patch(
+            f"/api/appointments/{appt_id}/status/",
+            {"status": "Cancelled"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {patient_token}",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert len(mail.outbox) == 1
+        assert "Cancelled" in mail.outbox[0].subject
+
+    def test_email_on_completion(self, client, doctor_user, patient_user, patient_token, doctor_token):
+        slot = self._create_slot(doctor_user)
+        appt_resp = client.post(
+            "/api/appointments/",
+            {"slot": slot.id},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {patient_token}",
+        )
+        mail.outbox.clear()
+        appt_id = appt_resp.data["data"]["id"]
+        client.patch(
+            f"/api/appointments/{appt_id}/status/",
+            {"status": "Confirmed"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {doctor_token}",
+        )
+        mail.outbox.clear()
+        response = client.patch(
+            f"/api/appointments/{appt_id}/status/",
+            {"status": "Completed"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {doctor_token}",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert len(mail.outbox) == 1
+        assert "Completed" in mail.outbox[0].subject
+
+    def test_no_email_on_invalid_transition(self, client, doctor_user, patient_user, patient_token, doctor_token):
+        slot = self._create_slot(doctor_user)
+        appt_resp = client.post(
+            "/api/appointments/",
+            {"slot": slot.id},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {patient_token}",
+        )
+        mail.outbox.clear()
+        appt_id = appt_resp.data["data"]["id"]
+        client.patch(
+            f"/api/appointments/{appt_id}/status/",
+            {"status": "Confirmed"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {doctor_token}",
+        )
+        mail.outbox.clear()
+        response = client.patch(
+            f"/api/appointments/{appt_id}/status/",
+            {"status": "Confirmed"},
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {doctor_token}",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert len(mail.outbox) == 0
