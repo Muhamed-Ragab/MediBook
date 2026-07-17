@@ -1,14 +1,16 @@
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from users.models import DoctorProfile
 
 from .models import Appointment, AvailabilitySlot
+from .notifications import send_appointment_email
 from .serializers import AppointmentSerializer, SlotSerializer
 
 
@@ -77,66 +79,144 @@ class SlotViewSet(viewsets.ModelViewSet):
 
 
 VALID_TRANSITIONS = {
-    "Cancelled": ["Pending", "Confirmed"],
+    "Pending": ["Confirmed", "Cancelled"],
+    "Confirmed": ["Completed", "Cancelled"],
+    "Completed": [],
+    "Cancelled": [],
+}
+
+ALLOWED_ROLES = {
+    ("Pending", "Confirmed"): ["doctor"],
+    ("Pending", "Cancelled"): ["doctor", "patient"],
+    ("Confirmed", "Completed"): ["doctor"],
+    ("Confirmed", "Cancelled"): ["doctor", "patient"],
 }
 
 
 class AppointmentViewSet(viewsets.ModelViewSet):
     serializer_class = AppointmentSerializer
     http_method_names = ["get", "post", "patch", "head", "options"]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["status"]
 
     def get_queryset(self):
         user = self.request.user
+        qs = Appointment.objects.select_related("slot__doctor", "patient")
         if user.is_staff:
-            return Appointment.objects.select_related("slot__doctor", "patient").all()
-        if user.role == "doctor":
-            return Appointment.objects.select_related("slot__doctor", "patient").filter(
-                slot__doctor=user
-            )
-        return Appointment.objects.select_related("slot__doctor", "patient").filter(
-            patient=user
-        )
+            pass
+        elif user.role == "doctor":
+            qs = qs.filter(slot__doctor=user)
+        else:
+            qs = qs.filter(patient=user)
+
+        if not self.request.query_params.get("status"):
+            qs = qs.exclude(status__in=["Completed", "Cancelled"])
+        return qs.order_by("slot__start_time")
 
     def perform_create(self, serializer):
         serializer.save(patient=self.request.user)
 
     def perform_update(self, serializer):
-        appointment = self.get_object()
-        new_status = serializer.validated_data.get("status")
-        if new_status:
-            allowed_prior = VALID_TRANSITIONS.get(new_status, [])
-            if appointment.status not in allowed_prior:
-                from rest_framework.exceptions import ValidationError as DRFValidationError
-                raise DRFValidationError(
-                    f"Cannot transition from '{appointment.status}' to '{new_status}'."
-                )
+        """Handle non-status updates (e.g. doctor_notes).
+        Status changes must go through the status_update endpoint."""
+        # If status is present, ignore it here — it's handled by status_update
+        validated_data = serializer.validated_data
+        if "status" in validated_data:
+            validated_data.pop("status")
         serializer.save()
 
-    def update(self, request, *args, **kwargs):
-        partial = kwargs.pop("partial", False)
-        instance = self.get_object()
+    @action(detail=True, methods=["patch"], url_path="status")
+    def status_update(self, request, pk=None):
+        """Canonical endpoint for appointment status transitions.
+        Validates transition rules, role permissions, and frees slot on cancel."""
+        try:
+            appointment = Appointment.objects.select_related(
+                "slot__doctor", "patient"
+            ).get(pk=pk)
+        except Appointment.DoesNotExist:
+            return Response(
+                {"success": False, "error": "Appointment not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         new_status = request.data.get("status")
 
+        if not new_status:
+            return Response(
+                {"success": False, "error": "status is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if new_status not in dict(Appointment.Status.choices):
+            return Response(
+                {"success": False, "error": f"Invalid status: {new_status}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        current_status = appointment.status
+        valid_targets = VALID_TRANSITIONS.get(current_status, [])
+        if new_status not in valid_targets:
+            return Response(
+                {
+                    "success": False,
+                    "error": f"Cannot transition from '{current_status}' to '{new_status}'.",
+                    "code": "INVALID_TRANSITION",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Role check
+        allowed_roles = ALLOWED_ROLES.get((current_status, new_status), [])
+        user_role = request.user.role
+        if user_role not in allowed_roles and not request.user.is_staff:
+            return Response(
+                {
+                    "success": False,
+                    "error": "You are not allowed to perform this action.",
+                    "code": "FORBIDDEN",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Doctor scope: can only manage own appointments
+        if user_role == "doctor" and appointment.slot.doctor != request.user:
+            return Response(
+                {
+                    "success": False,
+                    "error": "You can only manage your own appointments.",
+                    "code": "FORBIDDEN",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Patient scope: can only cancel own appointments
+        if user_role == "patient" and appointment.patient != request.user:
+            return Response(
+                {
+                    "success": False,
+                    "error": "You can only manage your own appointments.",
+                    "code": "FORBIDDEN",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Handle cancellation — free the slot with select_for_update
         if new_status == "Cancelled":
-            allowed = VALID_TRANSITIONS.get("Cancelled", [])
-            if instance.status not in allowed:
-                return Response(
-                    {"success": False, "error": f"Cannot cancel a {instance.status} appointment.", "code": "INVALID_TRANSITION"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
             with transaction.atomic():
-                slot = AvailabilitySlot.objects.select_for_update().get(pk=instance.slot_id)
-                instance.status = "Cancelled"
-                instance.save(update_fields=["status"])
+                slot = AvailabilitySlot.objects.select_for_update().get(pk=appointment.slot_id)
+                appointment.status = new_status
+                appointment.save(update_fields=["status"])
                 slot.is_booked = False
                 slot.save(update_fields=["is_booked"])
-            serializer = self.get_serializer(instance)
-            return Response({"success": True, "data": serializer.data, "error": None})
+        else:
+            appointment.status = new_status
+            appointment.save(update_fields=["status"])
 
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
-        serializer.is_valid(raise_exception=True)
-        self.perform_update(serializer)
-        return Response(serializer.data)
+        serializer = self.get_serializer(appointment)
+        send_appointment_email(
+            appointment,
+            subject=f"Appointment {appointment.get_status_display()} — MediBook",
+        )
+        return Response({"success": True, "data": serializer.data, "error": None})
 
     def create(self, request, *args, **kwargs):
         slot_id = request.data.get("slot")
@@ -186,6 +266,10 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         appointment = Appointment.objects.create(
             patient=request.user,
             slot=slot,
+        )
+        send_appointment_email(
+            appointment,
+            subject=f"Appointment Booked — MediBook",
         )
         serializer = self.get_serializer(appointment)
         return Response(

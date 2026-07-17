@@ -28,4 +28,9 @@ urlpatterns = [
         views.AppointmentViewSet.as_view({"get": "retrieve", "patch": "partial_update"}),
         name="appointment-detail",
     ),
+    path(
+        "appointments/<int:pk>/status/",
+        views.AppointmentViewSet.as_view({"patch": "status_update"}),
+        name="appointment-status",
+    ),
 ]
