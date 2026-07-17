@@ -77,7 +77,7 @@ def register_view(request):
         msg = EmailMultiAlternatives(
             subject="Verify your MediBook account",
             body=text,
-            from_email="noreply@medibook.com",
+            from_email=settings.DEFAULT_FROM_EMAIL,
             to=[user.email],
         )
         msg.attach_alternative(html, "text/html")
@@ -292,7 +292,7 @@ class DoctorProfileViewSet(viewsets.ModelViewSet):
         return DoctorProfileSerializer
 
     def get_permissions(self):
-        if self.action == "list":
+        if self.action in ("list", "retrieve"):
             return [AllowAny()]
         return [IsAuthenticated(), IsProfileOwner()]
 
